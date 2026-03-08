@@ -37,7 +37,7 @@ const upload = multer({
 function safeFilePath(fileName: string): string | null {
   const uploadsDir = path.resolve("uploads");
   const filePath = path.resolve(uploadsDir, fileName);
-  if (!filePath.startsWith(uploadsDir + path.sep) && filePath !== uploadsDir) {
+  if (!filePath.startsWith(uploadsDir + path.sep)) {
     return null; // Path traversal detected
   }
   return filePath;

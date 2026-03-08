@@ -26,14 +26,14 @@ app.use(
 );
 
 // Rate limiting to prevent brute force and DoS attacks
-const apiLimiter = rateLimit({
+const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many requests, please try again later." },
 });
-app.use("/api", apiLimiter);
+app.use("/api", apiRateLimiter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
