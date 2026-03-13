@@ -1,11 +1,47 @@
-import { Express } from "express";
-import multer from "multer";
+import { Express, Request } from "express";
+import multer, { FileFilterCallback } from "multer";
 import path from "path";
 import fs from "fs";
 import { Record } from "./models/Record";
 import { User } from "./models/User";
 
-const upload = multer({ dest: "uploads/" });
+// Allowed MIME types for medical record uploads
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+];
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only PDF, images, Word documents, and text files are allowed."));
+    }
+  },
+});
+
+/**
+ * Resolves a file path within the uploads directory and validates
+ * that it does not escape outside the uploads directory (path traversal protection).
+ */
+function safeFilePath(fileName: string): string | null {
+  const uploadsDir = path.resolve("uploads");
+  const filePath = path.resolve(uploadsDir, fileName);
+  if (!filePath.startsWith(uploadsDir + path.sep)) {
+    return null; // Path traversal detected
+  }
+  return filePath;
+}
 
 export function registerRoutes(app: Express) {
 
@@ -123,7 +159,10 @@ app.get("/api/metrics", async (req, res) => {
       if (!record) {
         return res.status(404).json({ message: "Record not found" });
       }
-      const filePath = path.resolve("uploads", record.fileName);
+      const filePath = safeFilePath(record.fileName);
+      if (!filePath) {
+        return res.status(400).json({ message: "Invalid file path" });
+      }
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ message: "File not found on server" });
       }
@@ -140,9 +179,9 @@ app.get("/api/metrics", async (req, res) => {
       if (!record) {
         return res.status(404).json({ message: "Record not found" });
       }
-      // Delete file from disk
-      const filePath = path.resolve("uploads", record.fileName);
-      if (fs.existsSync(filePath)) {
+      // Delete file from disk (with path traversal protection)
+      const filePath = safeFilePath(record.fileName);
+      if (filePath && fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
       await Record.findByIdAndDelete(req.params.id);
@@ -241,7 +280,7 @@ app.get("/api/metrics", async (req, res) => {
       res.json({ reply: replyContent });
     } catch (error: any) {
       console.error("Chat error:", error);
-      res.status(500).json({ error: "Failed to process chat message", details: error.message });
+      res.status(500).json({ error: "Failed to process chat message" });
     }
   });
 }
